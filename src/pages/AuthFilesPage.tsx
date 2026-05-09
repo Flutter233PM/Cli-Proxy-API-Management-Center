@@ -69,6 +69,7 @@ import {
   ANTIGRAVITY_CONFIG,
   GEMINI_CLI_CONFIG,
   KIMI_CONFIG,
+  type QuotaConfig,
 } from '@/components/quota';
 import { resolveAuthProvider, getStatusFromError } from '@/utils/quota';
 import styles from './AuthFilesPage.module.scss';
@@ -79,6 +80,10 @@ const BATCH_BAR_BASE_TRANSFORM = 'translateX(-50%)';
 const BATCH_BAR_HIDDEN_TRANSFORM = 'translateX(-50%) translateY(56px)';
 const DEFAULT_REGULAR_PAGE_SIZE = 9;
 const DEFAULT_COMPACT_PAGE_SIZE = 12;
+
+type QuotaStateSetter<TState> = (
+  updater: (prev: Record<string, TState>) => Record<string, TState>
+) => void;
 
 const escapeWildcardSearchSegment = (value: string) =>
   value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -571,33 +576,38 @@ export function AuthFilesPage() {
     const targets = files.filter((f) => nameSet.has(f.name));
     if (targets.length === 0) return;
 
-    interface ConfigEntry {
-      config: { type: string; fetchQuota: (f: AuthFileItem, tf: typeof t) => Promise<unknown>; buildLoadingState: () => unknown; buildSuccessState: (d: unknown) => unknown; buildErrorState: (m: string, s?: number) => unknown };
-      setter: (updater: unknown) => void;
-    }
-    const configs: ConfigEntry[] = [
-      { config: CODEX_CONFIG, setter: setCodexQuota as (u: unknown) => void },
-      { config: CLAUDE_CONFIG, setter: setClaudeQuota as (u: unknown) => void },
-      { config: ANTIGRAVITY_CONFIG, setter: setAntigravityQuota as (u: unknown) => void },
-      { config: GEMINI_CLI_CONFIG, setter: setGeminiCliQuota as (u: unknown) => void },
-      { config: KIMI_CONFIG, setter: setKimiQuota as (u: unknown) => void },
+    const createQuotaRefreshEntry = <TState, TData>(
+      config: QuotaConfig<TState, TData>,
+      setter: QuotaStateSetter<TState>
+    ) => ({
+      type: config.type,
+      refresh: async (file: AuthFileItem) => {
+        setter((prev) => ({ ...prev, [file.name]: config.buildLoadingState() }));
+
+        try {
+          const data = await config.fetchQuota(file, t);
+          setter((prev) => ({ ...prev, [file.name]: config.buildSuccessState(data) }));
+        } catch (err: unknown) {
+          const message = err instanceof Error ? err.message : t('common.unknown_error');
+          const status = getStatusFromError(err);
+          setter((prev) => ({ ...prev, [file.name]: config.buildErrorState(message, status) }));
+        }
+      },
+    });
+
+    const configs = [
+      createQuotaRefreshEntry(CODEX_CONFIG, setCodexQuota),
+      createQuotaRefreshEntry(CLAUDE_CONFIG, setClaudeQuota),
+      createQuotaRefreshEntry(ANTIGRAVITY_CONFIG, setAntigravityQuota),
+      createQuotaRefreshEntry(GEMINI_CLI_CONFIG, setGeminiCliQuota),
+      createQuotaRefreshEntry(KIMI_CONFIG, setKimiQuota),
     ];
 
     for (const file of targets) {
       const provider = resolveAuthProvider(file);
-      const entry = configs.find((c) => c.config.type === provider);
+      const entry = configs.find((c) => c.type === provider);
       if (!entry) continue;
-
-      entry.setter((prev: Record<string, unknown>) => ({ ...prev, [file.name]: entry.config.buildLoadingState() }));
-
-      try {
-        const data = await entry.config.fetchQuota(file, t);
-        entry.setter((prev: Record<string, unknown>) => ({ ...prev, [file.name]: entry.config.buildSuccessState(data) }));
-      } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : t('common.unknown_error');
-        const status = getStatusFromError(err);
-        entry.setter((prev: Record<string, unknown>) => ({ ...prev, [file.name]: entry.config.buildErrorState(message, status) }));
-      }
+      await entry.refresh(file);
     }
 
     showNotification(t('auth_files.quota_batch_refresh_done', { count: targets.length }), 'success');
