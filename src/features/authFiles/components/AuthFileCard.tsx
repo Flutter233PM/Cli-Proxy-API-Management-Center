@@ -1,4 +1,6 @@
+import { useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import { Button } from '@/components/ui/Button';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { SelectionCheckbox } from '@/components/ui/SelectionCheckbox';
@@ -7,12 +9,14 @@ import {
   IconDownload,
   IconInfo,
   IconModelCluster,
+  IconRefreshCw,
   IconSettings,
   IconTrash2,
 } from '@/components/ui/icons';
 import { ProviderStatusBar } from '@/components/providers/ProviderStatusBar';
+import { useNotificationStore, useQuotaStore } from '@/stores';
 import type { AuthFileItem } from '@/types';
-import { resolveAuthProvider } from '@/utils/quota';
+import { resolveAuthProvider, normalizePlanType, resolveCodexPlanType } from '@/utils/quota';
 import {
   normalizeRecentRequestAuthIndex,
   normalizeRecentRequestBuckets,
@@ -36,6 +40,19 @@ import { AuthFileQuotaSection } from '@/features/authFiles/components/AuthFileQu
 import styles from '@/pages/AuthFilesPage.module.scss';
 
 const HEALTHY_STATUS_MESSAGES = new Set(['ok', 'healthy', 'ready', 'success', 'available']);
+const PREMIUM_CODEX_PLAN_TYPES = new Set(['pro', 'prolite', 'pro-lite', 'pro_lite']);
+
+const getCodexPlanLabel = (planType: string | null | undefined, t: TFunction): string | null => {
+  const normalized = normalizePlanType(planType);
+  if (!normalized) return null;
+  if (normalized === 'pro') return t('codex_quota.plan_pro');
+  if (PREMIUM_CODEX_PLAN_TYPES.has(normalized) && normalized !== 'pro')
+    return t('codex_quota.plan_prolite');
+  if (normalized === 'plus') return t('codex_quota.plan_plus');
+  if (normalized === 'team') return t('codex_quota.plan_team');
+  if (normalized === 'free') return t('codex_quota.plan_free');
+  return planType || normalized;
+};
 
 export type AuthFileCardProps = {
   file: AuthFileItem;
@@ -63,6 +80,9 @@ const resolveQuotaType = (file: AuthFileItem): QuotaProviderType | null => {
 
 export function AuthFileCard(props: AuthFileCardProps) {
   const { t } = useTranslation();
+  const showNotification = useNotificationStore((state) => state.showNotification);
+  const codexQuotaMap = useQuotaStore((state) => state.codexQuota);
+  const setCodexQuota = useQuotaStore((state) => state.setCodexQuota);
   const {
     file,
     compact,
@@ -100,6 +120,17 @@ export function AuthFileCard(props: AuthFileCardProps) {
   const forceCodexQuota = resolvedQuotaType === 'codex' && !compact && !isRuntimeOnly;
   const showQuotaLayout = forceCodexQuota || (Boolean(quotaType) && !isRuntimeOnly && !compact);
   const effectiveQuotaType = quotaType || (forceCodexQuota ? 'codex' : null);
+
+  // Codex plan badge
+  const codexQuotaState = codexQuotaMap[file.name];
+  const codexPlanType =
+    resolvedQuotaType === 'codex'
+      ? resolveCodexPlanType(file) ?? codexQuotaState?.planType ?? null
+      : null;
+  const codexPlanLabel = codexPlanType ? getCodexPlanLabel(codexPlanType, t) : null;
+  const isPremiumCodexPlan = PREMIUM_CODEX_PLAN_TYPES.has(
+    normalizePlanType(codexPlanType) ?? ''
+  );
 
   const providerCardClass =
     resolvedQuotaType === 'codex' && !quotaFilterType
@@ -144,6 +175,19 @@ export function AuthFileCard(props: AuthFileCardProps) {
         ? styles.stateBadgeWarning
         : styles.stateBadgeActive;
 
+  // Refresh quota callback — exposed via ref from AuthFileQuotaSection
+  const quotaRefreshRef = useRef<(() => void) | null>(null);
+  const quotaLoading = codexQuotaState?.status === 'loading';
+  const canRefreshQuota = !disableControls && !file.disabled && effectiveQuotaType != null;
+
+  const handleRefreshQuota = useCallback(() => {
+    quotaRefreshRef.current?.();
+  }, []);
+
+  const handleRefreshRef = useCallback((fn: (() => void) | null) => {
+    quotaRefreshRef.current = fn;
+  }, []);
+
   return (
     <div
       className={`${styles.fileCard} ${compact ? styles.fileCardCompact : ''} ${providerCardClass} ${selected ? styles.fileCardSelected : ''} ${file.disabled ? styles.fileCardDisabled : ''}`}
@@ -174,6 +218,22 @@ export function AuthFileCard(props: AuthFileCardProps) {
                 >
                   {typeLabel}
                 </span>
+                {codexPlanLabel && (
+                  <span
+                    className={`${styles.typeBadge} ${isPremiumCodexPlan ? styles.premiumPlanValue : ''}`}
+                    style={
+                      isPremiumCodexPlan
+                        ? undefined
+                        : {
+                            backgroundColor: typeColor.bg,
+                            color: typeColor.text,
+                            border: typeColor.border || `1px solid ${typeColor.text}33`,
+                          }
+                    }
+                  >
+                    {codexPlanLabel}
+                  </span>
+                )}
                 <span className={`${styles.stateBadge} ${stateBadgeClass}`}>{stateLabel}</span>
               </div>
               <span className={styles.fileName} title={file.name}>
@@ -228,20 +288,21 @@ export function AuthFileCard(props: AuthFileCardProps) {
               </div>
             </div>
 
+            {showQuotaLayout && effectiveQuotaType && (
+              <AuthFileQuotaSection
+                file={file}
+                quotaType={effectiveQuotaType}
+                disableControls={disableControls}
+                onRefreshRef={handleRefreshRef}
+              />
+            )}
+
             <div className={`${styles.statusPanel} ${compact ? styles.statusPanelCompact : ''}`}>
               <div className={styles.statusPanelLabel}>
                 <span>{t('auth_files.health_status_label')}</span>
               </div>
               <ProviderStatusBar statusData={statusData} styles={styles} />
             </div>
-
-            {showQuotaLayout && effectiveQuotaType && (
-              <AuthFileQuotaSection
-                file={file}
-                quotaType={effectiveQuotaType}
-                disableControls={disableControls}
-              />
-            )}
           </div>
 
           <div className={styles.cardActions}>
@@ -285,6 +346,18 @@ export function AuthFileCard(props: AuthFileCardProps) {
                       >
                         <IconSettings className={styles.actionIcon} size={16} />
                       </Button>
+                      {effectiveQuotaType && (
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={handleRefreshQuota}
+                          className={styles.iconButton}
+                          title={t('codex_quota.refresh_button', { defaultValue: '刷新额度' })}
+                          disabled={!canRefreshQuota || quotaLoading}
+                        >
+                          <IconRefreshCw className={styles.actionIcon} size={16} />
+                        </Button>
+                      )}
                       <Button
                         variant="danger"
                         size="sm"

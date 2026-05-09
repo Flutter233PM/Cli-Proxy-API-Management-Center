@@ -1,4 +1,4 @@
-import { useCallback, type ReactNode } from 'react';
+import { useCallback, useEffect, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import {
@@ -9,7 +9,6 @@ import {
   KIMI_CONFIG
 } from '@/components/quota';
 import { useNotificationStore, useQuotaStore } from '@/stores';
-import { Button } from '@/components/ui/Button';
 import type { AuthFileItem } from '@/types';
 import { getStatusFromError } from '@/utils/quota';
 import {
@@ -34,10 +33,11 @@ export type AuthFileQuotaSectionProps = {
   file: AuthFileItem;
   quotaType: QuotaProviderType;
   disableControls: boolean;
+  onRefreshRef?: (fn: () => void) => void;
 };
 
 export function AuthFileQuotaSection(props: AuthFileQuotaSectionProps) {
-  const { file, quotaType, disableControls } = props;
+  const { file, quotaType, disableControls, onRefreshRef } = props;
   const { t } = useTranslation();
   const showNotification = useNotificationStore((state) => state.showNotification);
 
@@ -95,6 +95,13 @@ export function AuthFileQuotaSection(props: AuthFileQuotaSectionProps) {
     }
   }, [disableControls, file, quota?.status, quotaType, showNotification, t, updateQuotaState]);
 
+  // Expose refresh function to parent
+  useEffect(() => {
+    if (onRefreshRef) {
+      onRefreshRef(refreshQuotaForFile);
+    }
+  }, [onRefreshRef, refreshQuotaForFile]);
+
   const config = getQuotaConfig(quotaType) as unknown as {
     i18nPrefix: string;
     renderQuotaItems: (quota: unknown, t: TFunction, helpers: unknown) => unknown;
@@ -128,21 +135,7 @@ export function AuthFileQuotaSection(props: AuthFileQuotaSectionProps) {
           })}
         </div>
       ) : quota ? (
-        <>
-          {config.renderQuotaItems(quota, t, { styles, QuotaProgressBar }) as ReactNode}
-          {canRefreshQuota && (
-            <div style={{ marginTop: 8, display: 'flex', justifyContent: 'flex-end' }}>
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => void refreshQuotaForFile()}
-                disabled={quotaStatus === 'loading'}
-              >
-                {t('codex_quota.refresh_button', { defaultValue: '刷新额度' })}
-              </Button>
-            </div>
-          )}
-        </>
+        (config.renderQuotaItems(quota, t, { styles, QuotaProgressBar }) as ReactNode)
       ) : (
         <div className={styles.quotaMessage}>{t(`${config.i18nPrefix}.idle`)}</div>
       )}
