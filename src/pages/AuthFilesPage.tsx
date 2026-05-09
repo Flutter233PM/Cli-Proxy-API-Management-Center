@@ -21,7 +21,7 @@ import { usePageTransitionLayer } from '@/components/common/PageTransitionLayer'
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
-import { IconFilterAll, IconSearch } from '@/components/ui/icons';
+import { IconFilterAll, IconSearch, IconX } from '@/components/ui/icons';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ToggleSwitch } from '@/components/ui/ToggleSwitch';
 import { copyToClipboard } from '@/utils/clipboard';
@@ -45,6 +45,10 @@ import {
   type ResolvedTheme,
 } from '@/features/authFiles/constants';
 import { AuthFileCard } from '@/features/authFiles/components/AuthFileCard';
+import {
+  AuthFilesBatchEditModal,
+  type AuthFilesBatchEditPayload,
+} from '@/features/authFiles/components/AuthFilesBatchEditModal';
 import { AuthFileModelsModal } from '@/features/authFiles/components/AuthFileModelsModal';
 import { AuthFilesPrefixProxyEditorModal } from '@/features/authFiles/components/AuthFilesPrefixProxyEditorModal';
 import { OAuthExcludedCard } from '@/features/authFiles/components/OAuthExcludedCard';
@@ -62,7 +66,13 @@ import {
   writePersistedAuthFilesCompactMode,
   type AuthFilesSortMode,
 } from '@/features/authFiles/uiState';
-import { useAuthStore, useNotificationStore, useQuotaStore, useTagStore, useThemeStore } from '@/stores';
+import {
+  useAuthStore,
+  useNotificationStore,
+  useQuotaStore,
+  useTagStore,
+  useThemeStore,
+} from '@/stores';
 import {
   CODEX_CONFIG,
   CLAUDE_CONFIG,
@@ -71,6 +81,7 @@ import {
   KIMI_CONFIG,
   type QuotaConfig,
 } from '@/components/quota';
+import { authFilesApi } from '@/services/api';
 import { resolveAuthProvider, getStatusFromError } from '@/utils/quota';
 import styles from './AuthFilesPage.module.scss';
 
@@ -85,8 +96,7 @@ type QuotaStateSetter<TState> = (
   updater: (prev: Record<string, TState>) => Record<string, TState>
 ) => void;
 
-const escapeWildcardSearchSegment = (value: string) =>
-  value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const escapeWildcardSearchSegment = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 const buildWildcardSearch = (value: string): RegExp | null => {
   if (!value.includes('*')) return null;
@@ -107,10 +117,7 @@ const stringifySearchValue = (value: unknown): string[] => {
   return [];
 };
 
-const getCodexPlanLabel = (
-  planType: string | null | undefined,
-  t: TFunction
-): string | null => {
+const getCodexPlanLabel = (planType: string | null | undefined, t: TFunction): string | null => {
   const normalized = normalizePlanType(planType);
   if (!normalized) return null;
   if (normalized === 'pro') return t('codex_quota.plan_pro');
@@ -123,15 +130,10 @@ const getCodexPlanLabel = (
   return planType || normalized;
 };
 
-const getAuthFilePlanType = (
-  file: AuthFileItem,
-  quota?: CodexQuotaState
-): string | null => resolveCodexPlanType(file) ?? quota?.planType ?? null;
+const getAuthFilePlanType = (file: AuthFileItem, quota?: CodexQuotaState): string | null =>
+  resolveCodexPlanType(file) ?? quota?.planType ?? null;
 
-const getAuthFilePlanSortRank = (
-  file: AuthFileItem,
-  quota?: CodexQuotaState
-): number | null => {
+const getAuthFilePlanSortRank = (file: AuthFileItem, quota?: CodexQuotaState): number | null => {
   const normalized = normalizePlanType(getAuthFilePlanType(file, quota));
   if (!normalized) return null;
   if (normalized === 'pro') return 50;
@@ -142,11 +144,7 @@ const getAuthFilePlanSortRank = (
   return 0;
 };
 
-const getAuthFileSearchValues = (
-  file: AuthFileItem,
-  t: TFunction,
-  quota?: CodexQuotaState
-) => {
+const getAuthFileSearchValues = (file: AuthFileItem, t: TFunction, quota?: CodexQuotaState) => {
   const planType = getAuthFilePlanType(file, quota);
   const planLabel = getCodexPlanLabel(planType, t);
   const accountId = resolveCodexChatgptAccountId(file);
@@ -189,6 +187,7 @@ export function AuthFilesPage() {
   const allFileTags = useTagStore((state) => state.tags);
   const getAllTags = useTagStore((state) => state.getAllTags);
   const addTag = useTagStore((state) => state.addTag);
+  const removeTag = useTagStore((state) => state.removeTag);
   const pageTransitionLayer = usePageTransitionLayer();
   const isCurrentLayer = pageTransitionLayer ? pageTransitionLayer.status === 'current' : true;
   const navigate = useNavigate();
@@ -209,6 +208,8 @@ export function AuthFilesPage() {
   const [viewMode, setViewMode] = useState<'diagram' | 'list'>('list');
   const [sortMode, setSortMode] = useState<AuthFilesSortMode>('default');
   const [batchActionBarVisible, setBatchActionBarVisible] = useState(false);
+  const [batchEditOpen, setBatchEditOpen] = useState(false);
+  const [batchEditSaving, setBatchEditSaving] = useState(false);
   const [uiStateHydrated, setUiStateHydrated] = useState(false);
   const floatingBatchActionsRef = useRef<HTMLDivElement>(null);
   const batchActionAnimationRef = useRef<AnimationPlaybackControlsWithThen | null>(null);
@@ -313,10 +314,7 @@ export function AuthFilesPage() {
       if (typeof persisted.disabledOnly === 'boolean') {
         setDisabledOnly(persisted.disabledOnly);
       }
-      if (
-        typeof persistedCompactMode !== 'boolean' &&
-        typeof persisted.compactMode === 'boolean'
-      ) {
+      if (typeof persistedCompactMode !== 'boolean' && typeof persisted.compactMode === 'boolean') {
         setCompactMode(persisted.compactMode);
       }
       if (typeof persisted.search === 'string') {
@@ -332,11 +330,11 @@ export function AuthFilesPage() {
       const regularPageSize =
         typeof persisted.regularPageSize === 'number' && Number.isFinite(persisted.regularPageSize)
           ? clampCardPageSize(persisted.regularPageSize)
-          : legacyPageSize ?? DEFAULT_REGULAR_PAGE_SIZE;
+          : (legacyPageSize ?? DEFAULT_REGULAR_PAGE_SIZE);
       const compactPageSize =
         typeof persisted.compactPageSize === 'number' && Number.isFinite(persisted.compactPageSize)
           ? clampCardPageSize(persisted.compactPageSize)
-          : legacyPageSize ?? DEFAULT_COMPACT_PAGE_SIZE;
+          : (legacyPageSize ?? DEFAULT_COMPACT_PAGE_SIZE);
       setPageSizeByMode({
         regular: regularPageSize,
         compact: compactPageSize,
@@ -521,7 +519,16 @@ export function AuthFilesPage() {
         selectedTags.every((tag) => (allFileTags[item.name] || []).includes(tag));
       return matchType && matchSearch && matchTags;
     });
-  }, [codexQuota, filesMatchingStatusFilters, filter, normalizedSearch, t, wildcardSearch, selectedTags, allFileTags]);
+  }, [
+    codexQuota,
+    filesMatchingStatusFilters,
+    filter,
+    normalizedSearch,
+    t,
+    wildcardSearch,
+    selectedTags,
+    allFileTags,
+  ]);
 
   const sorted = useMemo(() => {
     const copy = [...filtered];
@@ -545,8 +552,7 @@ export function AuthFilesPage() {
         if (leftKnown || rightKnown) {
           if (!leftKnown) return 1;
           if (!rightKnown) return -1;
-          const rankDiff =
-            sortMode === 'plan-desc' ? rightRank - leftRank : leftRank - rightRank;
+          const rankDiff = sortMode === 'plan-desc' ? rightRank - leftRank : leftRank - rightRank;
           if (rankDiff !== 0) return rankDiff;
         }
 
@@ -569,6 +575,102 @@ export function AuthFilesPage() {
     [sorted]
   );
   const selectedNames = useMemo(() => Array.from(selectedFiles), [selectedFiles]);
+  const allTags = getAllTags();
+  const selectedEditableFiles = useMemo(() => {
+    const nameSet = new Set(selectedNames);
+    return files.filter((file) => nameSet.has(file.name) && !isRuntimeOnlyAuthFile(file));
+  }, [files, selectedNames]);
+
+  const handleRemoveFileTag = useCallback(
+    (fileName: string, tag: string) => {
+      const tagStillExists = Object.entries(allFileTags).some(([name, tags]) =>
+        name === fileName ? tags.filter((item) => item !== tag).includes(tag) : tags.includes(tag)
+      );
+      removeTag(fileName, tag);
+      if (!tagStillExists) {
+        setSelectedTags((current) => current.filter((item) => item !== tag));
+      }
+    },
+    [allFileTags, removeTag]
+  );
+
+  const handleRemoveTagEverywhere = useCallback(
+    (tag: string) => {
+      Object.keys(allFileTags).forEach((fileName) => removeTag(fileName, tag));
+      setSelectedTags((current) => current.filter((item) => item !== tag));
+      setPage(1);
+    },
+    [allFileTags, removeTag]
+  );
+
+  const handleBatchEditSave = useCallback(
+    async (payload: AuthFilesBatchEditPayload) => {
+      if (selectedEditableFiles.length === 0) {
+        showNotification(t('auth_files.batch_edit_no_targets'), 'warning');
+        return false;
+      }
+
+      const hasFieldPatch = Object.keys(payload.patch).length > 0;
+      setBatchEditSaving(true);
+      try {
+        let failed = 0;
+        if (hasFieldPatch) {
+          const results = await Promise.allSettled(
+            selectedEditableFiles.map((file) => authFilesApi.patchFields(file.name, payload.patch))
+          );
+          failed = results.filter((result) => result.status === 'rejected').length;
+        }
+
+        selectedEditableFiles.forEach((file) => {
+          payload.addTags.forEach((tag) => addTag(file.name, tag));
+          payload.removeTags.forEach((tag) => removeTag(file.name, tag));
+        });
+
+        if (payload.removeTags.length > 0) {
+          const editedNames = new Set(selectedEditableFiles.map((file) => file.name));
+          const nextTags = Object.fromEntries(
+            Object.entries(allFileTags).map(([fileName, tags]) => [
+              fileName,
+              editedNames.has(fileName)
+                ? tags.filter((tag) => !payload.removeTags.includes(tag))
+                : tags,
+            ])
+          );
+          setSelectedTags((current) =>
+            current.filter(
+              (tag) =>
+                !payload.removeTags.includes(tag) ||
+                Object.values(nextTags).some((tags) => tags.includes(tag))
+            )
+          );
+        }
+
+        if (hasFieldPatch) {
+          await loadFiles();
+        }
+
+        const success = selectedEditableFiles.length - failed;
+        if (failed > 0) {
+          showNotification(t('auth_files.batch_edit_partial', { success, failed }), 'warning');
+          return false;
+        }
+
+        showNotification(
+          t('auth_files.batch_edit_success', { count: selectedEditableFiles.length }),
+          'success'
+        );
+        setBatchEditOpen(false);
+        return true;
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : '';
+        showNotification(`${t('notification.update_failed')}: ${message}`, 'error');
+        return false;
+      } finally {
+        setBatchEditSaving(false);
+      }
+    },
+    [addTag, allFileTags, loadFiles, removeTag, selectedEditableFiles, showNotification, t]
+  );
 
   const batchRefreshQuota = useCallback(async () => {
     if (selectedNames.length === 0) return;
@@ -610,8 +712,21 @@ export function AuthFilesPage() {
       await entry.refresh(file);
     }
 
-    showNotification(t('auth_files.quota_batch_refresh_done', { count: targets.length }), 'success');
-  }, [selectedNames, files, t, showNotification, setCodexQuota, setClaudeQuota, setAntigravityQuota, setGeminiCliQuota, setKimiQuota]);
+    showNotification(
+      t('auth_files.quota_batch_refresh_done', { count: targets.length }),
+      'success'
+    );
+  }, [
+    selectedNames,
+    files,
+    t,
+    showNotification,
+    setCodexQuota,
+    setClaudeQuota,
+    setAntigravityQuota,
+    setGeminiCliQuota,
+    setKimiQuota,
+  ]);
 
   const selectedHasStatusUpdating = useMemo(
     () => selectedNames.some((name) => statusUpdating[name] === true),
@@ -884,29 +999,46 @@ export function AuthFilesPage() {
           <div className={styles.filterPanel}>
             <div className={styles.filterPanelTags}>
               {renderFilterTags()}
-              {getAllTags().length > 0 && (
-                <div className={styles.tagFilterDivider} />
-              )}
-              {getAllTags().map((tag) => {
+              {allTags.length > 0 && <div className={styles.tagFilterDivider} />}
+              {allTags.map((tag) => {
                 const isActive = selectedTags.includes(tag);
                 return (
-                  <button
+                  <span
                     key={tag}
                     className={`${styles.filterTag} ${isActive ? styles.filterTagActive : ''} ${styles.tagFilterChip}`}
-                    onClick={() => {
-                      setSelectedTags((prev) =>
-                        prev.includes(tag)
-                          ? prev.filter((t) => t !== tag)
-                          : [...prev, tag]
-                      );
-                      setPage(1);
-                    }}
+                    style={
+                      {
+                        '--filter-color': 'var(--primary-color)',
+                        '--filter-surface': 'var(--color-primary-light-9)',
+                        '--filter-active-text': '#ffffff',
+                      } as CSSProperties
+                    }
                   >
-                    <span className={styles.filterTagLabel}>
-                      <span className={styles.tagFilterIcon}>#</span>
-                      <span className={styles.filterTagText}>{tag}</span>
-                    </span>
-                  </button>
+                    <button
+                      type="button"
+                      className={styles.tagFilterToggle}
+                      onClick={() => {
+                        setSelectedTags((prev) =>
+                          prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]
+                        );
+                        setPage(1);
+                      }}
+                    >
+                      <span className={styles.filterTagLabel}>
+                        <span className={styles.tagFilterIcon}>#</span>
+                        <span className={styles.filterTagText}>{tag}</span>
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      className={styles.tagFilterRemove}
+                      aria-label={t('auth_files.remove_tag_label', { tag })}
+                      title={t('auth_files.remove_tag_label', { tag })}
+                      onClick={() => handleRemoveTagEverywhere(tag)}
+                    >
+                      <IconX size={12} />
+                    </button>
+                  </span>
                 );
               })}
             </div>
@@ -1035,6 +1167,7 @@ export function AuthFilesPage() {
                     onDelete={handleDelete}
                     onToggleStatus={handleStatusToggle}
                     onToggleSelect={toggleSelect}
+                    onRemoveTag={handleRemoveFileTag}
                   />
                 ))}
               </div>
@@ -1120,6 +1253,19 @@ export function AuthFilesPage() {
         onChange={handlePrefixProxyChange}
       />
 
+      <AuthFilesBatchEditModal
+        open={batchEditOpen}
+        selectedCount={selectedEditableFiles.length}
+        disabled={disableControls || selectedEditableFiles.length === 0}
+        saving={batchEditSaving}
+        onClose={() => {
+          if (!batchEditSaving) {
+            setBatchEditOpen(false);
+          }
+        }}
+        onSave={handleBatchEditSave}
+      />
+
       {batchActionBarVisible && typeof document !== 'undefined'
         ? createPortal(
             <div className={styles.batchActionContainer} ref={floatingBatchActionsRef}>
@@ -1163,16 +1309,28 @@ export function AuthFilesPage() {
                       onChange={(e) => setBatchTagInput(e.target.value)}
                       onKeyDown={(e) => {
                         if (e.key === 'Enter' && batchTagInput.trim()) {
-                          selectedNames.forEach((name) => addTag(name, batchTagInput.trim()));
+                          selectedEditableFiles.forEach((file) =>
+                            addTag(file.name, batchTagInput.trim())
+                          );
                           setBatchTagInput('');
                         }
                       }}
-                      placeholder={t('auth_files.tag_input_placeholder', { defaultValue: '输入标签后回车' })}
-                      disabled={selectedNames.length === 0}
+                      placeholder={t('auth_files.tag_input_placeholder', {
+                        defaultValue: '输入标签后回车',
+                      })}
+                      disabled={selectedEditableFiles.length === 0}
                     />
                   </span>
                 </div>
                 <div className={styles.batchActionRight}>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => setBatchEditOpen(true)}
+                    disabled={selectedEditableFiles.length === 0}
+                  >
+                    {t('auth_files.batch_edit_button')}
+                  </Button>
                   <Button
                     variant="secondary"
                     size="sm"

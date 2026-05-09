@@ -12,6 +12,7 @@ import {
   IconRefreshCw,
   IconSettings,
   IconTrash2,
+  IconX,
 } from '@/components/ui/icons';
 import { ProviderStatusBar } from '@/components/providers/ProviderStatusBar';
 import { useQuotaStore, useTagStore } from '@/stores';
@@ -71,6 +72,7 @@ export type AuthFileCardProps = {
   onDelete: (name: string) => void;
   onToggleStatus: (file: AuthFileItem, enabled: boolean) => void;
   onToggleSelect: (name: string) => void;
+  onRemoveTag: (fileName: string, tag: string) => void;
 };
 
 const resolveQuotaType = (file: AuthFileItem): QuotaProviderType | null => {
@@ -98,6 +100,7 @@ export function AuthFileCard(props: AuthFileCardProps) {
     onDelete,
     onToggleStatus,
     onToggleSelect,
+    onRemoveTag,
   } = props;
 
   const recentBuckets = normalizeRecentRequestBuckets(file.recent_requests ?? file.recentRequests);
@@ -124,12 +127,10 @@ export function AuthFileCard(props: AuthFileCardProps) {
   const codexQuotaState = codexQuotaMap[file.name];
   const codexPlanType =
     resolvedQuotaType === 'codex'
-      ? resolveCodexPlanType(file) ?? codexQuotaState?.planType ?? null
+      ? (resolveCodexPlanType(file) ?? codexQuotaState?.planType ?? null)
       : null;
   const codexPlanLabel = codexPlanType ? getCodexPlanLabel(codexPlanType, t) : null;
-  const isPremiumCodexPlan = PREMIUM_CODEX_PLAN_TYPES.has(
-    normalizePlanType(codexPlanType) ?? ''
-  );
+  const isPremiumCodexPlan = PREMIUM_CODEX_PLAN_TYPES.has(normalizePlanType(codexPlanType) ?? '');
 
   const providerCardClass =
     resolvedQuotaType === 'codex' && !quotaFilterType
@@ -239,7 +240,17 @@ export function AuthFileCard(props: AuthFileCardProps) {
                 <span className={`${styles.stateBadge} ${stateBadgeClass}`}>{stateLabel}</span>
                 {fileTags.map((tag) => (
                   <span key={tag} className={styles.tagBadge}>
-                    {tag}
+                    <span className={styles.tagBadgeText}>{tag}</span>
+                    <button
+                      type="button"
+                      className={styles.tagBadgeRemove}
+                      onClick={() => onRemoveTag(file.name, tag)}
+                      disabled={disableControls}
+                      aria-label={t('auth_files.remove_tag_label', { tag })}
+                      title={t('auth_files.remove_tag_label', { tag })}
+                    >
+                      <IconX size={12} />
+                    </button>
                   </span>
                 ))}
               </div>

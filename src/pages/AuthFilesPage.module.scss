@@ -140,7 +140,6 @@
   }
 }
 
-
 .filterAllIconWrap {
   position: relative;
   border-color: var(--color-primary-light-7);
@@ -154,7 +153,6 @@
   display: block;
   color: var(--primary-color);
 }
-
 
 .filterContent {
   display: flex;
@@ -976,10 +974,41 @@
 }
 
 .tagFilterChip {
-  opacity: 0.72;
+  gap: 6px;
+  min-height: 32px;
+  padding: 5px 7px 5px 10px;
+  border-radius: 999px;
+  opacity: 0.86;
 
   &:hover {
     opacity: 1;
+  }
+
+  &.filterTagActive {
+    border-color: color-mix(in srgb, var(--primary-color) 58%, var(--border-color));
+    background: var(--primary-color);
+    color: #fff;
+
+    .tagFilterIcon,
+    .tagFilterRemove {
+      color: #fff;
+    }
+  }
+}
+
+.tagFilterToggle {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+
+  &:focus-visible {
+    outline: none;
   }
 }
 
@@ -987,6 +1016,34 @@
   font-size: 14px;
   font-weight: 700;
   color: var(--text-tertiary);
+}
+
+.tagFilterRemove {
+  width: 18px;
+  height: 18px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 999px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  flex: 0 0 auto;
+  transition:
+    background-color $transition-fast,
+    color $transition-fast;
+
+  svg {
+    display: block;
+  }
+
+  &:hover,
+  &:focus-visible {
+    color: var(--danger-color);
+    background: color-mix(in srgb, var(--danger-color) 10%, transparent);
+    outline: none;
+  }
 }
 
 .batchTagInputWrapper {
@@ -1025,8 +1082,9 @@
 .tagBadge {
   display: inline-flex;
   align-items: center;
+  gap: 4px;
   padding: 3px 8px;
-  border-radius: 6px;
+  border-radius: 999px;
   font-size: 10px;
   font-weight: 600;
   line-height: 1;
@@ -1034,7 +1092,47 @@
   flex-shrink: 0;
   color: var(--text-secondary);
   background: color-mix(in srgb, var(--bg-tertiary) 70%, transparent);
-  border: 1px dashed color-mix(in srgb, var(--border-primary) 70%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border-primary) 72%, transparent);
+}
+
+.tagBadgeText {
+  min-width: 0;
+  max-width: 112px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tagBadgeRemove {
+  display: inline-grid;
+  place-items: center;
+  width: 14px;
+  height: 14px;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  flex: 0 0 auto;
+  transition:
+    background-color $transition-fast,
+    color $transition-fast;
+
+  svg {
+    display: block;
+  }
+
+  &:hover:not(:disabled),
+  &:focus-visible:not(:disabled) {
+    color: var(--danger-color);
+    background: color-mix(in srgb, var(--danger-color) 10%, transparent);
+    outline: none;
+  }
+
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.42;
+  }
 }
 
 .stateBadgeVirtual {
@@ -1520,6 +1618,82 @@
 .prefixProxyTextareaInvalid {
   border-color: var(--danger-color);
   box-shadow: 0 0 0 3px rgba($error-color, 0.12);
+}
+
+.batchEditModal {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-md;
+  max-height: 64vh;
+  overflow: auto;
+}
+
+.batchEditSection {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-sm;
+  padding-bottom: $spacing-md;
+  border-bottom: 1px solid color-mix(in srgb, var(--border-color) 58%, transparent);
+
+  &:last-child {
+    padding-bottom: 0;
+    border-bottom: 0;
+  }
+}
+
+.batchEditSectionTitle {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.batchEditFieldGrid,
+.batchEditTagGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: $spacing-sm;
+
+  @include mobile {
+    grid-template-columns: 1fr;
+  }
+}
+
+.batchEditField {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+
+  :global(.form-group) {
+    margin: 0;
+  }
+}
+
+.batchEditToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: fit-content;
+  max-width: 100%;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.4;
+  cursor: pointer;
+
+  input {
+    width: 15px;
+    height: 15px;
+    margin: 0;
+    accent-color: var(--primary-color);
+    flex: 0 0 auto;
+  }
+
+  span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
 }
 
 .cardActions {
