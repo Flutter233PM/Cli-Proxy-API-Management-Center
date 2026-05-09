@@ -62,7 +62,7 @@ import {
   writePersistedAuthFilesCompactMode,
   type AuthFilesSortMode,
 } from '@/features/authFiles/uiState';
-import { useAuthStore, useNotificationStore, useQuotaStore, useThemeStore } from '@/stores';
+import { useAuthStore, useNotificationStore, useQuotaStore, useTagStore, useThemeStore } from '@/stores';
 import {
   CODEX_CONFIG,
   CLAUDE_CONFIG,
@@ -182,6 +182,10 @@ export function AuthFilesPage() {
   const setAntigravityQuota = useQuotaStore((state) => state.setAntigravityQuota);
   const setGeminiCliQuota = useQuotaStore((state) => state.setGeminiCliQuota);
   const setKimiQuota = useQuotaStore((state) => state.setKimiQuota);
+  const allFileTags = useTagStore((state) => state.tags);
+  const getAllTags = useTagStore((state) => state.getAllTags);
+  const addTag = useTagStore((state) => state.addTag);
+  const setTags = useTagStore((state) => state.setTags);
   const pageTransitionLayer = usePageTransitionLayer();
   const isCurrentLayer = pageTransitionLayer ? pageTransitionLayer.status === 'current' : true;
   const navigate = useNavigate();
@@ -197,6 +201,8 @@ export function AuthFilesPage() {
     compact: DEFAULT_COMPACT_PAGE_SIZE,
   });
   const [pageSizeInput, setPageSizeInput] = useState('9');
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [batchTagInput, setBatchTagInput] = useState('');
   const [viewMode, setViewMode] = useState<'diagram' | 'list'>('list');
   const [sortMode, setSortMode] = useState<AuthFilesSortMode>('default');
   const [batchActionBarVisible, setBatchActionBarVisible] = useState(false);
@@ -550,9 +556,12 @@ export function AuthFilesPage() {
               : content.toLowerCase().includes(normalizedTerm);
           }
         );
-      return matchType && matchSearch;
+      const matchTags =
+        selectedTags.length === 0 ||
+        selectedTags.every((tag) => (allFileTags[item.name] || []).includes(tag));
+      return matchType && matchSearch && matchTags;
     });
-  }, [codexQuota, filesMatchingStatusFilters, filter, normalizedSearch, t, wildcardSearch]);
+  }, [codexQuota, filesMatchingStatusFilters, filter, normalizedSearch, t, wildcardSearch, selectedTags, allFileTags]);
 
   const sorted = useMemo(() => {
     const copy = [...filtered];
@@ -869,7 +878,34 @@ export function AuthFilesPage() {
 
         <div className={styles.filterSection}>
           <div className={styles.filterPanel}>
-            <div className={styles.filterPanelTags}>{renderFilterTags()}</div>
+            <div className={styles.filterPanelTags}>
+              {renderFilterTags()}
+              {getAllTags().length > 0 && (
+                <div className={styles.tagFilterDivider} />
+              )}
+              {getAllTags().map((tag) => {
+                const isActive = selectedTags.includes(tag);
+                return (
+                  <button
+                    key={tag}
+                    className={`${styles.filterTag} ${isActive ? styles.filterTagActive : ''} ${styles.tagFilterChip}`}
+                    onClick={() => {
+                      setSelectedTags((prev) =>
+                        prev.includes(tag)
+                          ? prev.filter((t) => t !== tag)
+                          : [...prev, tag]
+                      );
+                      setPage(1);
+                    }}
+                  >
+                    <span className={styles.filterTagLabel}>
+                      <span className={styles.tagFilterIcon}>#</span>
+                      <span className={styles.filterTagText}>{tag}</span>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
             <div className={styles.filterControlsPanel}>
               <div className={styles.filterControls}>
                 <div className={styles.filterItem}>
@@ -1115,6 +1151,22 @@ export function AuthFilesPage() {
                   <Button variant="ghost" size="sm" onClick={deselectAll}>
                     {t('auth_files.batch_deselect')}
                   </Button>
+                  <span className={styles.batchTagInputWrapper}>
+                    <input
+                      className={styles.batchTagInput}
+                      type="text"
+                      value={batchTagInput}
+                      onChange={(e) => setBatchTagInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && batchTagInput.trim()) {
+                          selectedNames.forEach((name) => addTag(name, batchTagInput.trim()));
+                          setBatchTagInput('');
+                        }
+                      }}
+                      placeholder={t('auth_files.tag_input_placeholder', { defaultValue: '输入标签后回车' })}
+                      disabled={selectedNames.length === 0}
+                    />
+                  </span>
                 </div>
                 <div className={styles.batchActionRight}>
                   <Button

@@ -967,6 +967,76 @@
   border: 1px solid var(--border-color);
 }
 
+.tagFilterDivider {
+  width: 1px;
+  height: 24px;
+  background: color-mix(in srgb, var(--border-color) 70%, transparent);
+  margin: 0 4px;
+  flex-shrink: 0;
+}
+
+.tagFilterChip {
+  opacity: 0.72;
+
+  &:hover {
+    opacity: 1;
+  }
+}
+
+.tagFilterIcon {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-tertiary);
+}
+
+.batchTagInputWrapper {
+  display: inline-flex;
+  align-items: center;
+}
+
+.batchTagInput {
+  width: 140px;
+  height: 32px;
+  padding: 4px 8px;
+  border: 1px dashed color-mix(in srgb, var(--border-primary) 60%, transparent);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 12px;
+  box-sizing: border-box;
+
+  &:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    border-style: solid;
+  }
+
+  &::placeholder {
+    color: var(--text-tertiary);
+    font-size: 11px;
+  }
+
+  &:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+}
+
+.tagBadge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  flex-shrink: 0;
+  color: var(--text-secondary);
+  background: color-mix(in srgb, var(--bg-tertiary) 70%, transparent);
+  border: 1px dashed color-mix(in srgb, var(--border-primary) 70%, transparent);
+}
+
 .stateBadgeVirtual {
   color: var(--text-secondary);
   background: color-mix(in srgb, var(--bg-tertiary) 82%, transparent);

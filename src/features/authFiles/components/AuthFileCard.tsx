@@ -14,7 +14,7 @@ import {
   IconTrash2,
 } from '@/components/ui/icons';
 import { ProviderStatusBar } from '@/components/providers/ProviderStatusBar';
-import { useQuotaStore } from '@/stores';
+import { useQuotaStore, useTagStore } from '@/stores';
 import type { AuthFileItem } from '@/types';
 import { resolveAuthProvider, normalizePlanType, resolveCodexPlanType } from '@/utils/quota';
 import {
@@ -173,6 +173,9 @@ export function AuthFileCard(props: AuthFileCardProps) {
         ? styles.stateBadgeWarning
         : styles.stateBadgeActive;
 
+  // Tags
+  const fileTags = useTagStore((state) => state.tags[file.name] || []);
+
   // Refresh quota callback — exposed via ref from AuthFileQuotaSection
   const quotaRefreshRef = useRef<(() => void) | null>(null);
   const quotaLoading = codexQuotaState?.status === 'loading';
@@ -233,6 +236,11 @@ export function AuthFileCard(props: AuthFileCardProps) {
                   </span>
                 )}
                 <span className={`${styles.stateBadge} ${stateBadgeClass}`}>{stateLabel}</span>
+                {fileTags.map((tag) => (
+                  <span key={tag} className={styles.tagBadge}>
+                    {tag}
+                  </span>
+                ))}
               </div>
               <span className={styles.fileName} title={file.name}>
                 {file.name}
