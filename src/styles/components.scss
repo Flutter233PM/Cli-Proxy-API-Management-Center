@@ -855,3 +855,41 @@ textarea {
 .hint {
   color: var(--text-secondary);
 }
+
+.route-error-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: $spacing-xl;
+  background: var(--bg-secondary);
+}
+
+.route-error-panel {
+  width: min(100%, 520px);
+  padding: $spacing-xl;
+  border: 1px solid var(--border-color);
+  border-radius: $radius-md;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+.route-error-panel h1 {
+  margin: 0 0 $spacing-sm;
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.route-error-panel p {
+  margin: 0;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.route-error-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: $spacing-sm;
+  margin-top: $spacing-lg;
+}

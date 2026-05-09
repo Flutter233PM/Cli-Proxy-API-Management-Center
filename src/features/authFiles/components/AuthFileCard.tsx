@@ -41,6 +41,7 @@ import styles from '@/pages/AuthFilesPage.module.scss';
 
 const HEALTHY_STATUS_MESSAGES = new Set(['ok', 'healthy', 'ready', 'success', 'available']);
 const PREMIUM_CODEX_PLAN_TYPES = new Set(['pro', 'prolite', 'pro-lite', 'pro_lite']);
+const EMPTY_TAGS: string[] = [];
 
 const getCodexPlanLabel = (planType: string | null | undefined, t: TFunction): string | null => {
   const normalized = normalizePlanType(planType);
@@ -174,7 +175,7 @@ export function AuthFileCard(props: AuthFileCardProps) {
         : styles.stateBadgeActive;
 
   // Tags
-  const fileTags = useTagStore((state) => state.tags[file.name] || []);
+  const fileTags = useTagStore((state) => state.tags[file.name] || EMPTY_TAGS);
 
   // Refresh quota callback — exposed via ref from AuthFileQuotaSection
   const quotaRefreshRef = useRef<(() => void) | null>(null);
