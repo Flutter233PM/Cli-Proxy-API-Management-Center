@@ -92,23 +92,29 @@ export function AuthFileCard(props: AuthFileCardProps) {
   const typeColor = getTypeColor(file.type || 'unknown', resolvedTheme);
   const typeLabel = getTypeLabel(t, file.type || 'unknown');
 
+  const resolvedQuotaType = resolveQuotaType(file);
   const quotaType =
-    quotaFilterType && resolveQuotaType(file) === quotaFilterType ? quotaFilterType : null;
+    quotaFilterType && resolvedQuotaType === quotaFilterType ? quotaFilterType : null;
 
-  const showQuotaLayout = Boolean(quotaType) && !isRuntimeOnly && !compact;
+  // Codex cards always show quota; other types only when filter matches
+  const forceCodexQuota = resolvedQuotaType === 'codex' && !compact && !isRuntimeOnly;
+  const showQuotaLayout = forceCodexQuota || (Boolean(quotaType) && !isRuntimeOnly && !compact);
+  const effectiveQuotaType = quotaType || (forceCodexQuota ? 'codex' : null);
 
   const providerCardClass =
-    quotaType === 'antigravity'
-      ? styles.antigravityCard
-      : quotaType === 'claude'
-        ? styles.claudeCard
-        : quotaType === 'codex'
-          ? styles.codexCard
-          : quotaType === 'gemini-cli'
-            ? styles.geminiCliCard
-            : quotaType === 'kimi'
-              ? styles.kimiCard
-              : '';
+    resolvedQuotaType === 'codex' && !quotaFilterType
+      ? styles.codexCard
+      : quotaType === 'antigravity'
+        ? styles.antigravityCard
+        : quotaType === 'claude'
+          ? styles.claudeCard
+          : quotaType === 'codex'
+            ? styles.codexCard
+            : quotaType === 'gemini-cli'
+              ? styles.geminiCliCard
+              : quotaType === 'kimi'
+                ? styles.kimiCard
+                : '';
 
   const rawAuthIndex = file['auth_index'] ?? file.authIndex;
   const authIndexKey = normalizeRecentRequestAuthIndex(rawAuthIndex);
@@ -229,10 +235,10 @@ export function AuthFileCard(props: AuthFileCardProps) {
               <ProviderStatusBar statusData={statusData} styles={styles} />
             </div>
 
-            {showQuotaLayout && quotaType && (
+            {showQuotaLayout && effectiveQuotaType && (
               <AuthFileQuotaSection
                 file={file}
-                quotaType={quotaType}
+                quotaType={effectiveQuotaType}
                 disableControls={disableControls}
               />
             )}

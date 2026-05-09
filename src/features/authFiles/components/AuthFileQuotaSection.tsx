@@ -9,6 +9,7 @@ import {
   KIMI_CONFIG
 } from '@/components/quota';
 import { useNotificationStore, useQuotaStore } from '@/stores';
+import { Button } from '@/components/ui/Button';
 import type { AuthFileItem } from '@/types';
 import { getStatusFromError } from '@/utils/quota';
 import {
@@ -127,7 +128,21 @@ export function AuthFileQuotaSection(props: AuthFileQuotaSectionProps) {
           })}
         </div>
       ) : quota ? (
-        (config.renderQuotaItems(quota, t, { styles, QuotaProgressBar }) as ReactNode)
+        <>
+          {config.renderQuotaItems(quota, t, { styles, QuotaProgressBar }) as ReactNode}
+          {canRefreshQuota && (
+            <div style={{ marginTop: 8, display: 'flex', justifyContent: 'flex-end' }}>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => void refreshQuotaForFile()}
+                disabled={quotaStatus === 'loading'}
+              >
+                {t('codex_quota.refresh_button', { defaultValue: '刷新额度' })}
+              </Button>
+            </div>
+          )}
+        </>
       ) : (
         <div className={styles.quotaMessage}>{t(`${config.i18nPrefix}.idle`)}</div>
       )}
