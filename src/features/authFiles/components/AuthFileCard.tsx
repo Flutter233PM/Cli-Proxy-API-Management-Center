@@ -14,7 +14,7 @@ import {
   IconTrash2,
 } from '@/components/ui/icons';
 import { ProviderStatusBar } from '@/components/providers/ProviderStatusBar';
-import { useNotificationStore, useQuotaStore } from '@/stores';
+import { useQuotaStore } from '@/stores';
 import type { AuthFileItem } from '@/types';
 import { resolveAuthProvider, normalizePlanType, resolveCodexPlanType } from '@/utils/quota';
 import {
@@ -80,9 +80,7 @@ const resolveQuotaType = (file: AuthFileItem): QuotaProviderType | null => {
 
 export function AuthFileCard(props: AuthFileCardProps) {
   const { t } = useTranslation();
-  const showNotification = useNotificationStore((state) => state.showNotification);
   const codexQuotaMap = useQuotaStore((state) => state.codexQuota);
-  const setCodexQuota = useQuotaStore((state) => state.setCodexQuota);
   const {
     file,
     compact,
