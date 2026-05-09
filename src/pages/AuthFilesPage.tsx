@@ -63,6 +63,15 @@ import {
   type AuthFilesSortMode,
 } from '@/features/authFiles/uiState';
 import { useAuthStore, useNotificationStore, useQuotaStore, useThemeStore } from '@/stores';
+import {
+  CODEX_CONFIG,
+  CLAUDE_CONFIG,
+  ANTIGRAVITY_CONFIG,
+  GEMINI_CLI_CONFIG,
+  KIMI_CONFIG,
+} from '@/components/quota';
+import { resolveAuthProvider, getStatusFromError } from '@/utils/quota';
+import { normalizeAuthIndex } from '@/utils/authIndex';
 import styles from './AuthFilesPage.module.scss';
 
 const easePower3Out = (progress: number) => 1 - (1 - progress) ** 4;
@@ -168,6 +177,11 @@ export function AuthFilesPage() {
   const connectionStatus = useAuthStore((state) => state.connectionStatus);
   const resolvedTheme: ResolvedTheme = useThemeStore((state) => state.resolvedTheme);
   const codexQuota = useQuotaStore((state) => state.codexQuota);
+  const setCodexQuota = useQuotaStore((state) => state.setCodexQuota);
+  const setClaudeQuota = useQuotaStore((state) => state.setClaudeQuota);
+  const setAntigravityQuota = useQuotaStore((state) => state.setAntigravityQuota);
+  const setGeminiCliQuota = useQuotaStore((state) => state.setGeminiCliQuota);
+  const setKimiQuota = useQuotaStore((state) => state.setKimiQuota);
   const pageTransitionLayer = usePageTransitionLayer();
   const isCurrentLayer = pageTransitionLayer ? pageTransitionLayer.status === 'current' : true;
   const navigate = useNavigate();
@@ -264,6 +278,50 @@ export function AuthFilesPage() {
   });
 
   const disableControls = connectionStatus !== 'connected';
+
+  const batchRefreshQuota = useCallback(async () => {
+    if (selectedNames.length === 0) return;
+    const nameSet = new Set(selectedNames);
+    const targets = files.filter((f) => nameSet.has(f.name));
+    if (targets.length === 0) return;
+
+    const configs = [
+      { config: CODEX_CONFIG, setter: setCodexQuota },
+      { config: CLAUDE_CONFIG, setter: setClaudeQuota },
+      { config: ANTIGRAVITY_CONFIG, setter: setAntigravityQuota },
+      { config: GEMINI_CLI_CONFIG, setter: setGeminiCliQuota },
+      { config: KIMI_CONFIG, setter: setKimiQuota },
+    ];
+
+    for (const file of targets) {
+      const provider = resolveAuthProvider(file);
+      const entry = configs.find((c) => c.config.type === provider);
+      if (!entry) continue;
+
+      entry.setter((prev: Record<string, unknown>) => ({
+        ...prev,
+        [file.name]: entry.config.buildLoadingState(),
+      }));
+
+      try {
+        const data = await entry.config.fetchQuota(file, t);
+        entry.setter((prev: Record<string, unknown>) => ({
+          ...prev,
+          [file.name]: entry.config.buildSuccessState(data),
+        }));
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : t('common.unknown_error');
+        const status = getStatusFromError(err);
+        entry.setter((prev: Record<string, unknown>) => ({
+          ...prev,
+          [file.name]: entry.config.buildErrorState(message, status),
+        }));
+      }
+    }
+
+    showNotification(t('auth_files.quota_batch_refresh_done', { count: targets.length }), 'success');
+  }, [selectedNames, files, t, showNotification, setCodexQuota, setClaudeQuota, setAntigravityQuota, setGeminiCliQuota, setKimiQuota]);
+
   const normalizedFilter = normalizeProviderKey(String(filter));
   const quotaFilterType: QuotaProviderType | null = QUOTA_PROVIDER_TYPES.has(
     normalizedFilter as QuotaProviderType
@@ -1073,6 +1131,14 @@ export function AuthFilesPage() {
                     disabled={batchStatusButtonsDisabled}
                   >
                     {t('auth_files.batch_enable')}
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => void batchRefreshQuota()}
+                    disabled={disableControls || selectedNames.length === 0}
+                  >
+                    {t('codex_quota.refresh_button', { defaultValue: '刷新额度' })}
                   </Button>
                   <Button
                     variant="secondary"
